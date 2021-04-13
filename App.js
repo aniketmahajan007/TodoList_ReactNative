@@ -3,10 +3,12 @@ import {Container, Content, Root, Text, Toast, View} from 'native-base';
 import NavHeader from "./components/NavHeader/NavHeader";
 import * as Font from 'expo-font';
 import {AntDesign, Ionicons} from '@expo/vector-icons';
-import {Alert, StyleSheet} from "react-native";
+import {Alert} from "react-native";
 import Formtext from "./components/Formtext/Formtext";
 import TodoList from "./components/TodoList/TodoList";
 import uuid from 'react-uuid';
+import topmargin from "./components/appstyle";
+import * as SQLite from 'expo-sqlite';
 
 export default class ButtonThemeExample extends Component {
     constructor(props) {
@@ -16,6 +18,29 @@ export default class ButtonThemeExample extends Component {
             todolist:[],
             showToast: false
         };
+        global.db = SQLite.openDatabase("todo2");
+        db.transaction(tx => {
+            tx.executeSql(
+                'CREATE TABLE IF NOT EXISTS todo (key text PRIMARY KEY, task TEXT, status INT)'
+            )
+        });
+        db.transaction(tx => {
+            tx.executeSql("select task,key,status from todo", [], (_, { rows }) => {
+                const list = [];
+                rows["_array"].forEach((todo)=>{
+                    if(todo.status){
+                        todo.status = true;
+                    }else{
+                        todo.status = false;
+                    }
+                    list.push(todo);
+                })
+                this.setState({
+                        todolist: list
+                    });
+                }
+            );
+        });
     }
     AddnewTask = (task) =>{
         if(task.trim() === ""){
@@ -25,9 +50,10 @@ export default class ButtonThemeExample extends Component {
             });
             return;
         }
+        const key = uuid()
         const taskobj = {
             task: task,
-            key: uuid(),
+            key: key,
             status: false
         }
         const newlist = this.state.todolist;
@@ -35,12 +61,19 @@ export default class ButtonThemeExample extends Component {
         this.setState({
             todolist: newlist
         });
+        db.transaction(tx => {
+            tx.executeSql("insert into todo (task, key, status) values (?,?,0)", [task,key]);
+        });
     }
     UpdateTask = (status, taskid) => {
         const updatelist = [];
         this.state.todolist.forEach((task)=>{
             if(task.key === taskid){
                 task.status = !task.status;
+                const st = task.status ? 1 : 0;
+                db.transaction(tx => {
+                    tx.executeSql("update todo set status=? WHERE key=?", [st, task.key]);
+                });
             }
             updatelist.push(task);
         })
@@ -76,6 +109,9 @@ export default class ButtonThemeExample extends Component {
             text: "All task removed.",
             duration: 3000
         });
+        db.transaction(tx => {
+            tx.executeSql("DELETE FROM todo", []);
+        });
     }
     async componentDidMount() {
         await Font.loadAsync({
@@ -87,28 +123,6 @@ export default class ButtonThemeExample extends Component {
         })
     }
   render() {
-      const topmargin = StyleSheet.create({
-          topping: {
-              marginTop: 10,
-          },
-          padding6: {
-              padding: 6,
-              backgroundColor: "#f9f9fa"
-          },
-          leftmar: {
-              marginLeft:14,
-              marginTop: 30,
-              fontStyle: "italic",
-              fontWeight: "bold",
-              fontSize:18
-          },
-          icon_delete:{
-              flexDirection: 'row',
-              alignItems:'flex-end',
-              justifyContent:'flex-end',
-              marginRight:14
-          }
-      })
         if (!this.state.isReady) {
           return <Container><Content style={topmargin.leftmar}><Text>Loading</Text></Content></Container>;
       }
